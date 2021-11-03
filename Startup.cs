@@ -1,7 +1,4 @@
-﻿// Copyright (c) Brock Allen & Dominick Baier. All rights reserved.
-// Licensed under the Apache License, Version 2.0. See LICENSE in the project root for license information.
-
-
+﻿using System;
 using System.Reflection;
 using IdentityServer4;
 using IdentityServer4.EntityFramework.DbContexts;
@@ -13,9 +10,12 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using System.Linq;
+using System.Security.Claims;
+using IdentityModel;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 
 namespace ZanduIdentity
 {
@@ -45,9 +45,15 @@ namespace ZanduIdentity
             AddExternalAuthProviders(services);
         }
 
-        public void Configure(IApplicationBuilder app)
+        /// <summary>
+        /// This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
+        /// Called after ConfigureServices
+        /// </summary>
+        /// <param name="app">The application.</param>
+        /// <param name="logger">The logger.</param>
+        public void Configure(IApplicationBuilder app, ILogger<Startup> logger)
         {
-            InitializeDatabase(app);
+            InitializeDatabase(app, logger);
 
             if (Environment.IsDevelopment())
             {
@@ -63,42 +69,175 @@ namespace ZanduIdentity
             app.UseEndpoints(endpoints => { endpoints.MapDefaultControllerRoute(); });
         }
         
-        private void InitializeDatabase(IApplicationBuilder app)
+        private void InitializeDatabase(IApplicationBuilder app, ILogger<Startup> logger)
         {
             using (var serviceScope = app.ApplicationServices.GetService<IServiceScopeFactory>().CreateScope())
             {
+                var applicationContext = serviceScope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+                applicationContext.Database.Migrate();
+                
                 serviceScope.ServiceProvider.GetRequiredService<PersistedGrantDbContext>().Database.Migrate();
 
-                var context = serviceScope.ServiceProvider.GetRequiredService<ConfigurationDbContext>();
-                context.Database.Migrate();
-                if (!context.Clients.Any())
-                {
-                    foreach (var client in Config.Clients)
-                    {
-                        context.Clients.Add(client.ToEntity());
-                    }
-                    context.SaveChanges();
-                }
+                var configurationContext = serviceScope.ServiceProvider.GetRequiredService<ConfigurationDbContext>();
+                configurationContext.Database.Migrate();
+                
+                InitializeClients(configurationContext);
+                InitializeResources(configurationContext);
+                InitializeApiScopes(configurationContext);
 
-                if (!context.IdentityResources.Any())
-                {
-                    foreach (var resource in Config.IdentityResources)
-                    {
-                        context.IdentityResources.Add(resource.ToEntity());
-                    }
-                    context.SaveChanges();
-                }
-
-                if (!context.ApiScopes.Any())
-                {
-                    foreach (var resource in Config.ApiScopes)
-                    {
-                        context.ApiScopes.Add(resource.ToEntity());
-                    }
-                    context.SaveChanges();
-                }
+                InitializeAdminRole(serviceScope);
+                InitializeStandardUserRole(serviceScope);
+                InitializeAdminUser(serviceScope, logger);
+                
+                TestUserConfig.AddTestUsers(serviceScope);
             }
         }
+
+        private static void InitializeApiScopes(ConfigurationDbContext context)
+        {
+            if (!context.ApiScopes.Any())
+            {
+                foreach (var resource in Config.ApiScopes)
+                {
+                    context.ApiScopes.Add(resource.ToEntity());
+                }
+
+                context.SaveChanges();
+            }
+        }
+
+        private static void InitializeResources(ConfigurationDbContext context)
+        {
+            if (!context.IdentityResources.Any())
+            {
+                foreach (var resource in Config.IdentityResources)
+                {
+                    context.IdentityResources.Add(resource.ToEntity());
+                }
+
+                context.SaveChanges();
+            }
+        }
+
+        private static void InitializeClients(ConfigurationDbContext context)
+        {
+            if (!context.Clients.Any())
+            {
+                foreach (var client in Config.Clients)
+                {
+                    context.Clients.Add(client.ToEntity());
+                }
+
+                context.SaveChanges();
+            }
+        }
+
+        private void InitializeAdminUser(IServiceScope scope, ILogger<Startup> logger)
+        {
+            var userMgr = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+            var admin = userMgr.FindByNameAsync("admin").Result;
+            if (admin == null)
+            {
+                admin = new ApplicationUser
+                {
+                    UserName = "admin",
+                    Email = "admin@zanducommerce.com",
+                    EmailConfirmed = true
+                };
+
+                var result = userMgr.CreateAsync(admin, "P@ssword01").Result;
+                if (!result.Succeeded)
+                {
+                    throw new Exception(result.Errors.First().Description);
+                }
+
+                result = userMgr.AddClaimsAsync(
+                    admin,
+                    new[]
+                    {
+                        new Claim(JwtClaimTypes.Name, "Administrator"),
+                        new Claim(JwtClaimTypes.GivenName, "Administrator"),
+                        new Claim(JwtClaimTypes.FamilyName, "Administrator"),
+                        new Claim(JwtClaimTypes.Email, "admin@abc.com"),
+                        new Claim(JwtClaimTypes.EmailVerified, "true", ClaimValueTypes.Boolean),
+                    }).Result;
+
+                if (!result.Succeeded)
+                {
+                    throw new Exception(result.Errors.First().Description);
+                }
+
+                result = userMgr.AddToRolesAsync(admin, new[] { Roles.Administrator, Roles.StandardUser }).Result;
+                if (!result.Succeeded)
+                {
+                    throw new Exception(result.Errors.First().Description);
+                }
+
+                logger.LogDebug("admin created");
+            }
+            else
+            {
+                logger.LogDebug("admin already exists");
+            }
+        }
+        
+        private void InitializeAdminRole(IServiceScope scope)
+        {
+            var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
+            var adminRole = roleManager.FindByNameAsync(Roles.Administrator).Result;
+            if (adminRole != null)
+            {
+                return;
+            }
+
+            adminRole = new IdentityRole()
+            {
+                Name = Roles.Administrator,
+                NormalizedName = Roles.Administrator.ToUpper()
+            };
+            var identityResult = roleManager.CreateAsync(adminRole).Result;
+            if (!identityResult.Succeeded)
+            {
+                throw new Exception(identityResult.Errors.First().Description);
+            }
+            
+            // TODO: Add custom claims at a later stage
+            // identityResult = roleManager.AddClaimAsync(adminRole, new Claim(CustomClaimType.Permission, Permissions.All)).Result;
+            // if (!identityResult.Succeeded)
+            // {
+            //     throw new Exception(identityResult.Errors.First().Description);
+            // }
+        }
+        
+        private void InitializeStandardUserRole(IServiceScope scope)
+        {
+            var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
+            var role = roleManager.FindByNameAsync(Roles.StandardUser).Result;
+            if (role != null)
+            {
+                return;
+            }
+
+            role = new IdentityRole()
+            {
+                Name = Roles.StandardUser,
+                NormalizedName = Roles.StandardUser.ToUpper()
+            };
+            var identityResult = roleManager.CreateAsync(role).Result;
+            if (!identityResult.Succeeded)
+            {
+                throw new Exception(identityResult.Errors.First().Description);
+            }
+
+            // TODO: Add custom claims at a later stage
+            // identityResult = roleManager.AddClaimAsync(role, new Claim(CustomClaimType.Permission, Permissions.ManageSelf)).Result;
+            //
+            // if (!identityResult.Succeeded)
+            // {
+            //     throw new Exception(identityResult.Errors.First().Description);
+            // }
+        }
+
 
         /// <summary>
         /// Adds the ASP net identity services. This is the persistence framework for storing users and roles.
@@ -114,8 +253,8 @@ namespace ZanduIdentity
             services.AddIdentity<ApplicationUser, IdentityRole>(opt =>
                 {
                     opt.Password.RequireDigit = false;
-                    opt.User.RequireUniqueEmail = true;
-                    opt.SignIn.RequireConfirmedEmail = true;
+                    // opt.User.RequireUniqueEmail = true;
+                    // opt.SignIn.RequireConfirmedEmail = true;
                 })
                 .AddEntityFrameworkStores<ApplicationDbContext>()
                 .AddClaimsPrincipalFactory<MyUserClaimsPrincipalFactory>()
