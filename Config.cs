@@ -83,6 +83,7 @@ namespace ZanduIdentity
                     RedirectUris = { "http://localhost:3000/auth/callback" },
                     PostLogoutRedirectUris = { "http://localhost:3000/auth/logout" },
                     AllowedCorsOrigins = { "http://localhost:3000" },
+                    AlwaysIncludeUserClaimsInIdToken = true,
 
                     AllowedScopes = new List<string>
                     {
