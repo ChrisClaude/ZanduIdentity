@@ -35,6 +35,8 @@ namespace ZanduIdentity
             var connectionString = Configuration.GetConnectionString("DefaultConnection");
 
             var migrationsAssembly = typeof(Startup).GetTypeInfo().Assembly.GetName().Name;
+            
+            services.AddRouting(options => options.LowercaseUrls = true);
 
             services.AddControllersWithViews();
 
