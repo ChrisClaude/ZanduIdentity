@@ -5,6 +5,10 @@ namespace ZanduIdentity.Models
     public class RegisterInputModel
     {
         [Required]
+        [StringLength(100, MinimumLength = 3, ErrorMessage = "Maximum 30 characters")]
+        public string UserName { get; set; }
+        
+        [Required]
         [EmailAddress]
         [Display(Name = "Email")]
         public string Email { get; set; }
