@@ -6,6 +6,7 @@ namespace ZanduIdentity.Models
     {
         [Required]
         [StringLength(100, MinimumLength = 3, ErrorMessage = "Maximum 30 characters")]
+        [Display(Name = "Username")]
         public string UserName { get; set; }
         
         [Required]
