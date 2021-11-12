@@ -35,7 +35,7 @@ namespace ZanduIdentity
             var connectionString = Configuration.GetConnectionString("DefaultConnection");
 
             var migrationsAssembly = typeof(Startup).GetTypeInfo().Assembly.GetName().Name;
-            
+
             services.AddRouting(options => options.LowercaseUrls = true);
 
             services.AddControllersWithViews();
@@ -70,27 +70,28 @@ namespace ZanduIdentity
             app.UseAuthorization();
             app.UseEndpoints(endpoints => { endpoints.MapDefaultControllerRoute(); });
         }
-        
+
         private void InitializeDatabase(IApplicationBuilder app, ILogger<Startup> logger)
         {
             using (var serviceScope = app.ApplicationServices.GetService<IServiceScopeFactory>().CreateScope())
             {
                 var applicationContext = serviceScope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
                 applicationContext.Database.Migrate();
-                
+
                 serviceScope.ServiceProvider.GetRequiredService<PersistedGrantDbContext>().Database.Migrate();
 
                 var configurationContext = serviceScope.ServiceProvider.GetRequiredService<ConfigurationDbContext>();
                 configurationContext.Database.Migrate();
-                
+
                 InitializeClients(configurationContext);
                 InitializeResources(configurationContext);
                 InitializeApiScopes(configurationContext);
+                InitializeApiResources(configurationContext);
 
                 InitializeAdminRole(serviceScope);
                 InitializeStandardUserRole(serviceScope);
                 InitializeAdminUser(serviceScope, logger);
-                
+
                 TestUserConfig.AddTestUsers(serviceScope);
             }
         }
@@ -102,6 +103,19 @@ namespace ZanduIdentity
                 foreach (var resource in Config.ApiScopes)
                 {
                     context.ApiScopes.Add(resource.ToEntity());
+                }
+
+                context.SaveChanges();
+            }
+        }
+        
+        private static void InitializeApiResources(ConfigurationDbContext context)
+        {
+            if (!context.ApiResources.Any())
+            {
+                foreach (var resource in Config.Apis)
+                {
+                    context.ApiResources.Add(resource.ToEntity());
                 }
 
                 context.SaveChanges();
@@ -182,7 +196,7 @@ namespace ZanduIdentity
                 logger.LogDebug("admin already exists");
             }
         }
-        
+
         private void InitializeAdminRole(IServiceScope scope)
         {
             var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
@@ -202,7 +216,7 @@ namespace ZanduIdentity
             {
                 throw new Exception(identityResult.Errors.First().Description);
             }
-            
+
             // TODO: Add custom claims at a later stage
             // identityResult = roleManager.AddClaimAsync(adminRole, new Claim(CustomClaimType.Permission, Permissions.All)).Result;
             // if (!identityResult.Succeeded)
@@ -210,7 +224,7 @@ namespace ZanduIdentity
             //     throw new Exception(identityResult.Errors.First().Description);
             // }
         }
-        
+
         private void InitializeStandardUserRole(IServiceScope scope)
         {
             var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
@@ -276,6 +290,7 @@ namespace ZanduIdentity
                         // options.IssuerUri = identityServerOption.IssuerUri;
                         // options.PublicOrigin = identityServerOption.PublicOrigin;
                         options.EmitStaticAudienceClaim = true;
+                        options.Discovery.CustomEntries.Add("local_api", "~/api");
                     })
                 .AddDeveloperSigningCredential()
                 .AddAspNetIdentity<ApplicationUser>()
@@ -285,7 +300,8 @@ namespace ZanduIdentity
                         options.ConfigureDbContext = b => b.UseSqlServer(
                             connectionString,
                             sql => sql.MigrationsAssembly(migrationsAssembly));
-                    }).AddOperationalStore(
+                    })
+                .AddOperationalStore(
                     options =>
                     {
                         options.ConfigureDbContext = b => b.UseSqlServer(
@@ -296,6 +312,8 @@ namespace ZanduIdentity
                         options.EnableTokenCleanup = true;
                         options.TokenCleanupInterval = 60;
                     });
+
+            services.AddLocalApiAuthentication();
         }
 
         private static void AddExternalAuthProviders(IServiceCollection services)

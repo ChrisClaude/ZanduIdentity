@@ -6,6 +6,19 @@ namespace ZanduIdentity
 {
     public static class Config
     {
+        public static IEnumerable<ApiResource> Apis = new List<ApiResource>
+        {
+            // local API
+            new ApiResource
+            {
+                Name = IdentityServerConstants.LocalApi.ScopeName,
+                Scopes =
+                {
+                    IdentityServerConstants.LocalApi.ScopeName
+                }
+            }
+        };
+
         public static IEnumerable<IdentityResource> IdentityResources =>
             new IdentityResource[]
             {
@@ -19,6 +32,7 @@ namespace ZanduIdentity
                 new ApiScope("scope1"),
                 new ApiScope("scope2"),
                 new ApiScope("Zandu.Core", "Zandu Core API"),
+                new ApiScope(IdentityServerConstants.LocalApi.ScopeName, "Identity Server Local API"),
             };
 
         public static IEnumerable<Client> Clients =>
@@ -30,12 +44,17 @@ namespace ZanduIdentity
                     ClientId = "m2m.client",
                     ClientName = "Client Credentials Client",
 
+                    AllowAccessTokensViaBrowser = true,
                     AllowedGrantTypes = GrantTypes.ClientCredentials,
                     ClientSecrets = { new Secret("511536EF-F270-4058-80CA-1C89C192F69A".Sha256()) },
 
-                    AllowedScopes = { "scope1", "Zandu.Core" }
+                    AllowedScopes =
+                    {
+                        IdentityServerConstants.LocalApi.ScopeName,
+                        "scope1",
+                        "Zandu.Core"
+                    }
                 },
-
                 // interactive client using code flow + pkce
                 new Client
                 {
@@ -89,6 +108,7 @@ namespace ZanduIdentity
                     {
                         IdentityServerConstants.StandardScopes.OpenId,
                         IdentityServerConstants.StandardScopes.Profile,
+                        IdentityServerConstants.LocalApi.ScopeName,
                         "Zandu.Core"
                     }
                 }
