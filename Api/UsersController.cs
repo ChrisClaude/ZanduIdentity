@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using IdentityServer4;
@@ -41,6 +42,71 @@ namespace ZanduIdentity.Api
             _logger.LogInformation("Get all users");
             
             var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == id);
+            return Ok(user);
+        }
+
+        [HttpPut("{id}")]
+        public async Task<ActionResult<IEnumerable<ApplicationUser>>> UpdateUserAsync(string id, ApplicationUser user)
+        {
+            if (id != user.Id)
+            {
+                return BadRequest();
+            }
+
+            var storedUser = await _context.Users.FirstOrDefaultAsync(u => u.Id == id);
+
+            if (storedUser != null)
+            {
+                return NotFound();
+            }
+
+            _context.Entry(user).State = EntityState.Modified;
+
+            try
+            {
+                await _context.SaveChangesAsync();
+            }
+            catch (DbUpdateException)
+            {
+                if ((await _context.Users.FindAsync(id)) == null)
+                {
+                    return NotFound();
+                }
+            }
+            
+            return NoContent();
+        }
+
+        [HttpPost]
+        [ProducesResponseType(StatusCodes.Status201Created)]
+        public async Task<ActionResult<ApplicationUser>> CreateUserAsync(ApplicationUser user)
+        {
+            if (user == null)
+            {
+                throw new ArgumentNullException(nameof(user));
+            }
+
+            await _context.Users.AddAsync(user);
+            await _context.SaveChangesAsync();
+            return CreatedAtRoute(nameof(GetUserAsync), new {Id = user.Id}, user);
+        }
+
+        [HttpDelete("{id:int}")]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        public async Task<ActionResult<ApplicationUser>> DeleteUserAsync(int id)
+        {
+            var user = await _context.Users.FindAsync(id);
+
+            if (user == null)
+            {
+                return NotFound();
+            }
+
+            _context.Users.Remove(user);
+
+            await _context.SaveChangesAsync();
+
             return Ok(user);
         }
     }
