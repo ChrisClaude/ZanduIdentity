@@ -16,6 +16,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using ZanduIdentity.Data.Repositories.UserRepo;
 
 namespace ZanduIdentity
 {
@@ -40,6 +41,9 @@ namespace ZanduIdentity
 
             services.AddControllersWithViews();
 
+            services.AddScoped<IUserRepo, UserRepo>();
+            services.AddAutoMapper(AppDomain.CurrentDomain.GetAssemblies());
+            
             AddASPNetIdentityServices(services, connectionString);
 
             AddIdentityServer(services, connectionString, migrationsAssembly);
