@@ -40,6 +40,8 @@ namespace ZanduIdentity
             services.AddRouting(options => options.LowercaseUrls = true);
 
             services.AddControllersWithViews();
+            
+            services.AddDatabaseDeveloperPageExceptionFilter();
 
             services.AddScoped<IUserRepo, UserRepo>();
             services.AddAutoMapper(AppDomain.CurrentDomain.GetAssemblies());
@@ -64,7 +66,7 @@ namespace ZanduIdentity
             if (Environment.IsDevelopment())
             {
                 app.UseDeveloperExceptionPage();
-                app.UseDatabaseErrorPage();
+                app.UseMigrationsEndPoint();
             }
 
             app.UseStaticFiles();
