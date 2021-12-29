@@ -111,6 +111,37 @@ namespace ZanduIdentity
                         IdentityServerConstants.LocalApi.ScopeName,
                         "Zandu.Core"
                     }
+                },
+                new Client
+                {
+                    ClientName = "Postman",
+                    AllowOfflineAccess = true,
+                    AllowedScopes = new []
+                    {
+                        IdentityServerConstants.StandardScopes.OpenId,
+                        IdentityServerConstants.StandardScopes.Profile,
+                        IdentityServerConstants.LocalApi.ScopeName,
+                        "Zandu.Core"
+                    },
+                    RedirectUris = new []
+                    {
+                        "https://www.getpostman.com/oauth2/callback"
+                    },
+                    Enabled = true,
+                    ClientId = "545asf54-54fd445g-46514-fad456fda5j7h9gkf",
+                    ClientSecrets = new[]
+                    {
+                        new Secret("NotASecret".Sha256())
+                    },
+                    PostLogoutRedirectUris = new []
+                    {
+                        "http://locahost:5002/signout-callback-oidc"
+                    },
+                    ClientUri = null,
+                    AllowedGrantTypes = new []
+                    {
+                        GrantType.ResourceOwnerPassword
+                    }
                 }
             };
     }

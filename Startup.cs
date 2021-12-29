@@ -16,6 +16,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using ZanduIdentity.Data.Repositories.UserRepo;
 
 namespace ZanduIdentity
 {
@@ -39,7 +40,12 @@ namespace ZanduIdentity
             services.AddRouting(options => options.LowercaseUrls = true);
 
             services.AddControllersWithViews();
+            
+            services.AddDatabaseDeveloperPageExceptionFilter();
 
+            services.AddScoped<IUserRepo, UserRepo>();
+            services.AddAutoMapper(AppDomain.CurrentDomain.GetAssemblies());
+            
             AddASPNetIdentityServices(services, connectionString);
 
             AddIdentityServer(services, connectionString, migrationsAssembly);
@@ -60,7 +66,7 @@ namespace ZanduIdentity
             if (Environment.IsDevelopment())
             {
                 app.UseDeveloperExceptionPage();
-                app.UseDatabaseErrorPage();
+                app.UseMigrationsEndPoint();
             }
 
             app.UseStaticFiles();
@@ -161,7 +167,7 @@ namespace ZanduIdentity
                     EmailConfirmed = true
                 };
 
-                var result = userMgr.CreateAsync(admin, "P@ssword01").Result;
+                var result = userMgr.CreateAsync(admin, "Password123!").Result;
                 if (!result.Succeeded)
                 {
                     throw new Exception(result.Errors.First().Description);
